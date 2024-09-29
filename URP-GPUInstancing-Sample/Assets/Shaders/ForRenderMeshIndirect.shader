@@ -89,15 +89,20 @@ Shader "Custom/ForRenderMeshIndirect"
 
         HLSLINCLUDE
 
-         StructuredBuffer<float4x4> _TransformMatrixArray;
-         half3 _BoundsOffset;
+        StructuredBuffer<float4x4> _TransformMatrixArray;
+        half3 _BoundsOffset;
 
-         void transform_vertex(inout float3 position, inout float3 normal, uint instanceId)
-         {
-                float4x4 mat = _TransformMatrixArray[instanceId];
-                position = mul(mat, float4(position, 1.0)).xyz - _BoundsOffset;
-                normal = normalize(mul((float3x3)mat, normal));
-         }
+        void transform_vertex(inout float3 position, uint instanceId)
+        {
+            float4x4 mat = _TransformMatrixArray[instanceId];
+            position = mul(mat, float4(position, 1.0)).xyz - _BoundsOffset;
+        }
+
+        void rotate_vector(inout float3 vec, uint instanceId)
+        {
+            float4x4 mat = _TransformMatrixArray[instanceId];
+            vec = normalize(mul((float3x3)mat, vec));
+        }
         
         ENDHLSL
         
@@ -185,7 +190,7 @@ Shader "Custom/ForRenderMeshIndirect"
             #define UNITY_INDIRECT_DRAW_ARGS IndirectDrawIndexedArgs
             #include "UnityIndirect.cginc"
 
-            Varyings LitPassVertexForRenderMeshIndirect(Attributes input, uint instanceID : SV_InstanceID)
+            Varyings LitPassVertexForRenderMeshIndirect(Attributes input, uint svInstanceID : SV_InstanceID)
             {
                 InitIndirectDrawArgs(0);
                 Varyings output = (Varyings)0;
@@ -194,8 +199,10 @@ Shader "Custom/ForRenderMeshIndirect"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                transform_vertex(input.positionOS.xyz, input.normalOS.xyz, instanceID);
-                input.tangentOS.xyz = normalize(mul((float3x3)_TransformMatrixArray[instanceID], input.tangentOS.xyz));
+                uint instanceID = GetIndirectInstanceID(svInstanceID);
+                transform_vertex(input.positionOS.xyz, instanceID);
+                rotate_vector(input.normalOS.xyz, instanceID);
+                rotate_vector(input.tangentOS.xyz, instanceID);
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
             
                 // normalWS and tangentWS already normalize.
@@ -305,7 +312,7 @@ Shader "Custom/ForRenderMeshIndirect"
             #define UNITY_INDIRECT_DRAW_ARGS IndirectDrawIndexedArgs
             #include "UnityIndirect.cginc"
             
-            Varyings ShadowPassVertexForRenderMeshIndirect(Attributes input, uint instanceID : SV_InstanceID)
+            Varyings ShadowPassVertexForRenderMeshIndirect(Attributes input, uint svInstanceID : SV_InstanceID)
             {
                 InitIndirectDrawArgs(0);
                 Varyings output;
@@ -315,7 +322,9 @@ Shader "Custom/ForRenderMeshIndirect"
                 #if defined(_ALPHATEST_ON)
                     output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
                 #endif
-                transform_vertex(input.positionOS.xyz, input.normalOS.xyz, instanceID);
+                uint instanceID = GetIndirectInstanceID(svInstanceID);
+                transform_vertex(input.positionOS.xyz, instanceID);
+                rotate_vector(input.normalOS.xyz, instanceID);
                 output.positionCS = GetShadowPositionHClip(input);
                 return output;
             }
@@ -448,14 +457,15 @@ Shader "Custom/ForRenderMeshIndirect"
             #define UNITY_INDIRECT_DRAW_ARGS IndirectDrawIndexedArgs
             #include "UnityIndirect.cginc"
             
-            Varyings DepthOnlyVertexForRenderMeshIndirect(Attributes input, uint instanceID : SV_InstanceID)
+            Varyings DepthOnlyVertexForRenderMeshIndirect(Attributes input, uint svInstanceID : SV_InstanceID)
             {
                 InitIndirectDrawArgs(0);
                 Varyings output = (Varyings)0;
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                uint instanceID = GetIndirectInstanceID(svInstanceID);
                 float3 _ = float3(0, 0, 1);
-                transform_vertex(input.position.xyz, _, instanceID);
+                transform_vertex(input.position.xyz, instanceID);
              
                 #if defined(_ALPHATEST_ON)
                     output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
