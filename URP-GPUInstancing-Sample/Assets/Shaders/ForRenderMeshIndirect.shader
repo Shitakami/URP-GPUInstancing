@@ -89,12 +89,12 @@ Shader "Custom/ForRenderMeshIndirect"
 
         HLSLINCLUDE
 
-         StructuredBuffer<float4x4> _MatricesArray;
+         StructuredBuffer<float4x4> _TransformMatrixArray;
          half3 _BoundsOffset;
 
          void transform_vertex(inout float3 position, inout float3 normal, uint instanceId)
          {
-                float4x4 mat = _MatricesArray[instanceId];
+                float4x4 mat = _TransformMatrixArray[instanceId];
                 position = mul(mat, float4(position, 1.0)).xyz - _BoundsOffset;
                 normal = normalize(mul((float3x3)mat, normal));
          }
@@ -195,7 +195,7 @@ Shader "Custom/ForRenderMeshIndirect"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 transform_vertex(input.positionOS.xyz, input.normalOS.xyz, instanceID);
-                input.tangentOS.xyz = normalize(mul((float3x3)_MatricesArray[instanceID], input.tangentOS.xyz));
+                input.tangentOS.xyz = normalize(mul((float3x3)_TransformMatrixArray[instanceID], input.tangentOS.xyz));
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
             
                 // normalWS and tangentWS already normalize.
