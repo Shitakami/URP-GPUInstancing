@@ -1,0 +1,96 @@
+#pragma kernel CubeAnimation
+RWStructuredBuffer<float4x4> TransformMatrixArray;
+int TransformMatrixArrayLength;
+
+float InstancedHeight;
+float DestroyHeight;
+float MoveVelocity;
+float RotationVelocity; 
+float DeltaTime;
+
+float RandomFloat(uint seed)
+{
+    seed = (seed << 13u) ^ seed;
+    uint result = (seed * (seed * seed * 15731u + 789221u) + 1376312589u);
+    return result / 4294967296.0f;
+}
+
+float3 RandomFloat3Direction(uint seed)
+{
+    float u = RandomFloat(seed * 3 + 0) * 2.0f - 1.0f;
+    float theta = RandomFloat(seed * 3 + 1) * 6.28318530718f; // 2 * pi
+
+    float sqrtOneMinusUSquared = sqrt(1.0f - u * u);
+    float x = sqrtOneMinusUSquared * cos(theta);
+    float y = sqrtOneMinusUSquared * sin(theta);
+    float z = u;
+
+    return float3(x, y, z);
+}
+
+float3x3 AxisAngleRotation(float3 axis, float angle)
+{
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float t = 1.0f - c;
+
+    float x = axis.x;
+    float y = axis.y;
+    float z = axis.z;
+
+    float3x3 m;
+    m[0][0] = t * x * x + c;
+    m[0][1] = t * x * y - s * z;
+    m[0][2] = t * x * z + s * y;
+
+    m[1][0] = t * x * y + s * z;
+    m[1][1] = t * y * y + c;
+    m[1][2] = t * y * z - s * x;
+
+    m[2][0] = t * x * z - s * y;
+    m[2][1] = t * y * z + s * x;
+    m[2][2] = t * z * z + c;
+
+    return m;
+}
+
+[numthreads(64,1,1)]
+void CubeAnimation (uint3 id : SV_DISPATCHTHREADID)
+{
+    int index = id.x;
+    if (index >= TransformMatrixArrayLength)
+    {
+        return;
+    }
+    
+    float4x4 transformMatrix = TransformMatrixArray[index];
+    float3 position = float3(transformMatrix[0].w, transformMatrix[1].w, transformMatrix[2].w);
+    position.y -= MoveVelocity * DeltaTime;
+    
+    if (position.y < DestroyHeight)
+    {
+        position.y = InstancedHeight;
+    }
+
+    float3 rotateAxis = RandomFloat3Direction(index + 1);
+    float angle = RotationVelocity * DeltaTime;
+    
+    float3x3 incrementalRotation = AxisAngleRotation(rotateAxis, angle);
+    float3x3 rotationMatrix = float3x3
+    (
+        transformMatrix[0].xyz,
+        transformMatrix[1].xyz,
+        transformMatrix[2].xyz
+    );
+    
+    rotationMatrix = mul(rotationMatrix, incrementalRotation);
+    
+    TransformMatrixArray[index] = float4x4
+    (
+        rotationMatrix[0], position.x,
+        rotationMatrix[1], position.y,
+        rotationMatrix[2], position.z,
+        0, 0, 0, 1
+    );
+}
